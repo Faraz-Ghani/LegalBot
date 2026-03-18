@@ -5,8 +5,13 @@ import streamlit as st
 from chat import query_rag_pipeline
 from retrieve import retrieve_relevant_chunks
 import os
-import subprocess
 from pathlib import Path
+
+# Import ingest functions directly
+try:
+    from ingest import ingest_pdfs
+except ImportError as e:
+    st.warning(f"Warning: Could not import ingest module: {e}")
 
 # Initialize Groq API key - works both locally (.env) and in production (Streamlit secrets)
 groq_api_key = None
@@ -125,31 +130,15 @@ st.markdown("""
 st.sidebar.markdown("## 🛠️ Database Management")
 
 if st.sidebar.button("🧠 Build/Update Vector Database", use_container_width=True):
-    """Run the ingest.py script to build/update the vector database."""
+    """Build/update the vector database by ingesting PDFs."""
     with st.spinner("Reading and embedding PDFs... This may take a minute."):
         try:
-            # Get the directory of the current script
-            script_dir = Path(__file__).parent
-            ingest_script = script_dir / "ingest.py"
-            
-            # Run ingest.py as a subprocess
-            result = subprocess.run(
-                ["python", str(ingest_script)],
-                cwd=str(script_dir),
-                capture_output=True,
-                text=True,
-                timeout=600  # 10 minute timeout
-            )
-            
-            if result.returncode == 0:
-                st.sidebar.success("✅ Vector database built successfully!")
-                st.rerun()
-            else:
-                st.sidebar.error(f"❌ Error building database:\n{result.stderr}")
-        except subprocess.TimeoutExpired:
-            st.sidebar.error("❌ Database build timed out (exceeded 10 minutes)")
+            # Call ingest function directly
+            vectorstore = ingest_pdfs("./data", "./chroma_db")
+            st.sidebar.success("✅ Vector database built successfully!")
+            st.rerun()
         except Exception as e:
-            st.sidebar.error(f"❌ Error running ingest.py: {str(e)}")
+            st.sidebar.error(f"❌ Error building database: {str(e)}")
 
 st.sidebar.markdown("---")
 st.sidebar.info("ℹ️ Click the button above to build or update the vector database from PDFs in the `data/` directory.")
