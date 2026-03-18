@@ -48,11 +48,20 @@ def retrieve_relevant_chunks(
     
     retrieved_chunks = []
     for i, (doc, score) in enumerate(results, 1):
+        # Extract source filename from metadata
+        metadata = doc.metadata if hasattr(doc, 'metadata') else {}
+        source = metadata.get('source', 'Unknown Source')
+        
+        # Extract just the filename from the path if it's a full path
+        if '/' in source:
+            source = source.split('/')[-1]
+        
         chunk_data = {
             "rank": i,
             "text": doc.page_content,
             "similarity_score": round(score, 4),
-            "metadata": doc.metadata if hasattr(doc, 'metadata') else {}
+            "source": source,
+            "metadata": metadata
         }
         retrieved_chunks.append(chunk_data)
     
@@ -76,12 +85,10 @@ def format_retrieval_results(retrieved_chunks: List[Dict[str, any]]) -> str:
     output += "=" * 80 + "\n\n"
     
     for chunk in retrieved_chunks:
-        output += f"[Result {chunk['rank']}] (Similarity Score: {chunk['similarity_score']})\n"
+        source = chunk.get('source', 'Unknown Source')
+        output += f"[{source}] (Similarity Score: {chunk['similarity_score']})\n"
         output += "-" * 80 + "\n"
-        output += f"{chunk['text']}\n"
-        if chunk['metadata']:
-            output += f"\nMetadata: {chunk['metadata']}\n"
-        output += "\n"
+        output += f"{chunk['text']}\n\n"
     
     return output
 

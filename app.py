@@ -187,12 +187,11 @@ with chat_container:
                 if message_id in st.session_state.sources:
                     sources = st.session_state.sources[message_id]
                     with st.expander("📄 View Sources", expanded=False):
-                        for i, source in enumerate(sources, 1):
+                        for source in sources:
                             with st.container():
-                                st.markdown(f"**Source {i}** (Similarity: {source['similarity_score']})")
+                                source_name = source.get('source', 'Unknown Source')
+                                st.markdown(f"**{source_name}** (Similarity: {source['similarity_score']})")
                                 st.markdown(f"```\n{source['text']}\n```")
-                                if source.get('metadata'):
-                                    st.caption(f"📌 {source['metadata']}")
 
 # Input section
 st.markdown("---")
@@ -249,8 +248,9 @@ if send_button and user_input and database_exists:
                 
                 # Display sources in expandable section
                 with st.expander("📄 View Sources", expanded=False):
-                    for i, source in enumerate(retrieved_chunks, 1):
-                        st.markdown(f"**Source {i}** (Similarity: {source['similarity_score']})")
+                    for source in retrieved_chunks:
+                        source_name = source.get('source', 'Unknown Source')
+                        st.markdown(f"**{source_name}** (Similarity: {source['similarity_score']})")
                         st.markdown(f"```\n{source['text']}\n```")
                         if source.get('metadata'):
                             st.caption(f"📌 {source['metadata']}")
