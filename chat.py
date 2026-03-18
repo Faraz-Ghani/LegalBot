@@ -53,8 +53,9 @@ def build_context_from_chunks(chunks: list) -> str:
     context = "RELEVANT CONTEXT FROM DOCUMENTS:\n"
     context += "=" * 80 + "\n\n"
     
-    for i, chunk in enumerate(chunks, 1):
-        context += f"[Source {i}] {chunk.get('metadata', {})}\n"
+    for chunk in chunks:
+        source = chunk.get('source', 'Unknown Source')
+        context += f"[{source}] {chunk.get('metadata', {})}\n"
         context += "-" * 80 + "\n"
         context += f"{chunk['text']}\n\n"
     

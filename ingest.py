@@ -10,42 +10,44 @@ from langchain_community.vectorstores import Chroma
 from dotenv import load_dotenv
 
 
-def read_pdfs_from_directory(directory: str = "./data") -> str:
+def read_pdfs_from_directory(directory: str = "./data") -> dict:
     """
-    Read all PDF files from the specified directory and extract text.
+    Read all PDF files from the specified directory and extract text per PDF.
     
     Args:
         directory: Path to the directory containing PDF files
         
     Returns:
-        Combined text from all PDFs
+        Dictionary with {filename: text} mapping
     """
-    all_text = ""
+    pdf_texts = {}
     data_path = Path(directory)
     
     if not data_path.exists():
         print(f"Warning: Directory '{directory}' does not exist.")
-        return all_text
+        return pdf_texts
     
     pdf_files = list(data_path.glob("*.pdf"))
     
     if not pdf_files:
         print(f"No PDF files found in '{directory}'")
-        return all_text
+        return pdf_texts
     
     for pdf_file in pdf_files:
         try:
             print(f"Reading: {pdf_file.name}")
             doc = fitz.open(pdf_file)
+            file_text = ""
             for page_num in range(len(doc)):
                 page = doc[page_num]
                 text = page.get_text()
-                all_text += text + "\n"
+                file_text += text + "\n"
+            pdf_texts[pdf_file.name] = file_text
             doc.close()
         except Exception as e:
             print(f"Error reading {pdf_file.name}: {e}")
     
-    return all_text
+    return pdf_texts
 
 
 def clean_text(text: str) -> str:
@@ -95,12 +97,13 @@ def chunk_text(text: str, chunk_size: int = 800, chunk_overlap: int = 150) -> li
     return chunks
 
 
-def embed_and_store_chunks(chunks: list, persist_directory: str = "./chroma_db") -> Chroma:
+def embed_and_store_chunks(chunks: list, metadatas: list = None, persist_directory: str = "./chroma_db") -> Chroma:
     """
     Embed chunks using HuggingFace embeddings and store in ChromaDB.
     
     Args:
         chunks: List of text chunks to embed
+        metadatas: List of metadata dictionaries corresponding to chunks
         persist_directory: Directory to persist ChromaDB
         
     Returns:
@@ -111,10 +114,11 @@ def embed_and_store_chunks(chunks: list, persist_directory: str = "./chroma_db")
     # Initialize HuggingFace embeddings (runs locally, no API key needed)
     embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
     
-    # Create ChromaDB vector store with embeddings
+    # Create ChromaDB vector store with embeddings and metadata
     vectorstore = Chroma.from_texts(
         texts=chunks,
         embedding=embeddings,
+        metadatas=metadatas,
         persist_directory=persist_directory,
         collection_name="pdf_documents"
     )
@@ -143,26 +147,46 @@ def ingest_pdfs(directory: str = "./data", persist_directory: str = "./chroma_db
     
     print(f"Starting PDF ingestion from '{directory}'...\n")
     
-    # Step 1: Read PDFs
-    raw_text = read_pdfs_from_directory(directory)
+    # Step 1: Read all PDFs as separate documents
+    pdf_texts = read_pdfs_from_directory(directory)
     
-    if not raw_text.strip():
-        print("No text extracted from PDFs.")
+    if not pdf_texts:
+        print("No PDFs found to ingest.")
         return None
     
-    print(f"Raw text extracted: {len(raw_text)} characters\n")
+    # Step 2: Process each PDF separately to track sources
+    all_chunks = []
+    all_metadatas = []
     
-    # Step 2: Clean text
-    cleaned_text = clean_text(raw_text)
-    print(f"Cleaned text: {len(cleaned_text)} characters\n")
+    for filename, raw_text in pdf_texts.items():
+        if not raw_text.strip():
+            print(f"Warning: No text extracted from {filename}")
+            continue
+        
+        print(f"Processing: {filename} ({len(raw_text)} characters)")
+        
+        # Clean text
+        cleaned_text = clean_text(raw_text)
+        
+        # Chunk text
+        chunks = chunk_text(cleaned_text)
+        
+        # Add chunks with source metadata
+        for chunk in chunks:
+            all_chunks.append(chunk)
+            all_metadatas.append({"source": filename})
+        
+        print(f"  Created {len(chunks)} chunks from {filename}\n")
     
-    # Step 3: Chunk text
-    chunks = chunk_text(cleaned_text)
-    print(f"Total chunks created: {len(chunks)}")
-    print(f"Average chunk size: {sum(len(c) for c in chunks) / len(chunks):.0f} characters\n")
+    if not all_chunks:
+        print("No chunks created from PDFs.")
+        return None
     
-    # Step 4: Embed and store in ChromaDB
-    vectorstore = embed_and_store_chunks(chunks, persist_directory)
+    print(f"Total chunks created: {len(all_chunks)}")
+    print(f"Average chunk size: {sum(len(c) for c in all_chunks) / len(all_chunks):.0f} characters\n")
+    
+    # Step 3: Embed and store in ChromaDB with metadata
+    vectorstore = embed_and_store_chunks(all_chunks, all_metadatas, persist_directory)
     
     return vectorstore
 
