@@ -130,8 +130,15 @@ st.markdown("""
 # Sidebar - Vector Database Management
 st.sidebar.markdown("## 🛠️ Database Management")
 
-if st.sidebar.button("🧠 Build/Update Vector Database", use_container_width=True):
-    """Build/update the vector database by ingesting PDFs."""
+st.sidebar.info(
+    "✅ Vector database is pre-loaded with legal documents from Pakistan.\n\n"
+    "Total documents: 13 PDFs\n"
+    "Total chunks: 3,160\n"
+    "Embedding model: all-MiniLM-L6-v2"
+)
+
+if st.sidebar.button("🔄 Refresh Database (Developers)", use_container_width=True, help="Only for local development"):
+    """Refresh the vector database by re-ingesting PDFs."""
     if ingest_pdfs is None:
         st.sidebar.error("❌ Ingest module not available. Check that all dependencies are installed.")
     else:
@@ -139,15 +146,12 @@ if st.sidebar.button("🧠 Build/Update Vector Database", use_container_width=Tr
             try:
                 # Call ingest function directly
                 vectorstore = ingest_pdfs("./data", "./chroma_db")
-                st.sidebar.success("✅ Vector database built successfully!")
+                st.sidebar.success("✅ Database refreshed successfully!")
                 st.rerun()
             except FileNotFoundError as e:
                 st.sidebar.error(f"❌ Files not found: {str(e)}")
             except Exception as e:
-                st.sidebar.error(f"❌ Error building database: {str(e)}\n\nFull error:\n{type(e).__name__}: {e}")
-
-st.sidebar.markdown("---")
-st.sidebar.info("ℹ️ Click the button above to build or update the vector database from PDFs in the `data/` directory.")
+                st.sidebar.error(f"❌ Error refreshing database: {str(e)}")
 
 # Initialize session state for chat history
 if "messages" not in st.session_state:
@@ -164,12 +168,11 @@ database_exists = chroma_db_path.exists()
 st.markdown("# ⚖️ Legal Document RAG Assistant")
 st.markdown("Ask questions about Pakistani legal documents. Get answers sourced directly from official documents.")
 
-# Warning if database doesn't exist
+# Warning if database doesn't exist (shouldn't happen in production)
 if not database_exists:
     st.warning(
-        "⚠️ Vector database not found. Please click the **'🧠 Build/Update Vector Database'** button in the sidebar to initialize the system."
+        "⚠️ Vector database not found. This shouldn't happen in production. Please contact support."
     )
-    st.info("The database will read all PDFs from the `data/` directory and embed them for searching.")
 
 # Display chat history
 chat_container = st.container()
