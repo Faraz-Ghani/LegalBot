@@ -1,0 +1,6 @@
+langchain
+langchain-huggingface
+sentence-transformers
+chromadb
+pymupdf
+python-dotenv
