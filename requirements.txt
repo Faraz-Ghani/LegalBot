@@ -1,6 +1,9 @@
 langchain
 langchain-huggingface
+langchain-groq
+langchain-community
 sentence-transformers
 chromadb
 pymupdf
 python-dotenv
+streamlit
