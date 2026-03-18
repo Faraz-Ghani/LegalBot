@@ -1,7 +1,10 @@
 import os
 from pathlib import Path
-import fitz  # PyMuPDF
-from langchain.text_splitter import RecursiveCharacterTextSplitter
+try:
+    import fitz  # PyMuPDF
+except ImportError:
+    import pymupdf as fitz  # Fallback for newer versions
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.vectorstores import Chroma
 from dotenv import load_dotenv
