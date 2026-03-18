@@ -1,3 +1,6 @@
+import warnings
+warnings.filterwarnings("ignore", category=UserWarning, module="langchain_core._api.deprecation")
+
 import streamlit as st
 from chat import query_rag_pipeline
 from retrieve import retrieve_relevant_chunks
