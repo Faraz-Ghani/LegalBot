@@ -42,8 +42,12 @@ wheels/
 *~
 .DS_Store
 
-# ChromaDB
-chroma_db/
+# Data files (PDFs - large, regenerated from ingestion)
+Data/
+data/
+
+# ChromaDB - we'll commit the pre-built database for production
+# chroma_db/
 .chroma/
 
 # Streamlit
