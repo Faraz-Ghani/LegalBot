@@ -8,10 +8,11 @@ import os
 from pathlib import Path
 
 # Import ingest functions directly
+ingest_pdfs = None
 try:
     from ingest import ingest_pdfs
 except ImportError as e:
-    st.warning(f"Warning: Could not import ingest module: {e}")
+    pass  # Will be handled in the button click
 
 # Initialize Groq API key - works both locally (.env) and in production (Streamlit secrets)
 groq_api_key = None
@@ -131,14 +132,19 @@ st.sidebar.markdown("## 🛠️ Database Management")
 
 if st.sidebar.button("🧠 Build/Update Vector Database", use_container_width=True):
     """Build/update the vector database by ingesting PDFs."""
-    with st.spinner("Reading and embedding PDFs... This may take a minute."):
-        try:
-            # Call ingest function directly
-            vectorstore = ingest_pdfs("./data", "./chroma_db")
-            st.sidebar.success("✅ Vector database built successfully!")
-            st.rerun()
-        except Exception as e:
-            st.sidebar.error(f"❌ Error building database: {str(e)}")
+    if ingest_pdfs is None:
+        st.sidebar.error("❌ Ingest module not available. Check that all dependencies are installed.")
+    else:
+        with st.spinner("Reading and embedding PDFs... This may take a minute."):
+            try:
+                # Call ingest function directly
+                vectorstore = ingest_pdfs("./data", "./chroma_db")
+                st.sidebar.success("✅ Vector database built successfully!")
+                st.rerun()
+            except FileNotFoundError as e:
+                st.sidebar.error(f"❌ Files not found: {str(e)}")
+            except Exception as e:
+                st.sidebar.error(f"❌ Error building database: {str(e)}\n\nFull error:\n{type(e).__name__}: {e}")
 
 st.sidebar.markdown("---")
 st.sidebar.info("ℹ️ Click the button above to build or update the vector database from PDFs in the `data/` directory.")
