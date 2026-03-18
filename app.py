@@ -9,12 +9,19 @@ import subprocess
 from pathlib import Path
 
 # Initialize Groq API key - works both locally (.env) and in production (Streamlit secrets)
-try:
-    groq_api_key = os.environ.get("GROQ_API_KEY", "").strip()
-    if not groq_api_key:
-        groq_api_key = st.secrets.get("GROQ_API_KEY", "")
-except Exception:
-    groq_api_key = st.secrets.get("GROQ_API_KEY", "")
+groq_api_key = None
+
+# Try environment variable first (local .env)
+groq_api_key = os.environ.get("GROQ_API_KEY", "").strip()
+
+# Try Streamlit secrets if env var not found
+if not groq_api_key:
+    try:
+        # Safely access secrets without triggering parse errors
+        groq_api_key = st.secrets.get("GROQ_API_KEY", "").strip()
+    except Exception:
+        # If secrets file is malformed or doesn't exist, continue
+        pass
 
 if not groq_api_key:
     st.error("❌ GROQ_API_KEY not found. Please set it in .env (local) or Streamlit secrets (production).")
