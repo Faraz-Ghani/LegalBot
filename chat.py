@@ -5,14 +5,13 @@ from langchain_groq import ChatGroq
 from langchain_core.messages import HumanMessage, SystemMessage
 from retrieve import retrieve_relevant_chunks
 
-# Load environment variables from .env in the project directory
-env_path = Path(__file__).parent / ".env"
-load_dotenv(dotenv_path=env_path)
-
-# Verify GROQ_API_KEY is set
-groq_api_key = os.getenv("GROQ_API_KEY")
-if not groq_api_key:
-    raise ValueError("Error: GROQ_API_KEY is not set in .env file")
+# Try to load environment variables from .env file (for local development)
+try:
+    env_path = Path(__file__).parent / ".env"
+    if env_path.exists():
+        load_dotenv(dotenv_path=env_path)
+except Exception:
+    pass  # .env may not exist in production (Streamlit Cloud uses secrets)
 
 # System prompt - strict context-only answering
 SYSTEM_PROMPT = """You are an expert assistant. You will be provided with context extracted from official documents. Your ONLY job is to answer the user's question using STRICTLY the provided context. If the answer is not explicitly stated in the context, you must reply exactly with: "The provided documents do not contain this information." Do not use outside knowledge. Do not guess. Always cite the source filename and page number for your answer."""
