@@ -50,9 +50,6 @@ data/
 # chroma_db/
 .chroma/
 
-# Streamlit
-.streamlit/
-
 # Testing
 .pytest_cache/
 .coverage
