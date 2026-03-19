@@ -25,6 +25,14 @@ SECTION_KEYWORDS = {
     '310': ['compounding', 'qisas', 'sulh'],
 }
 
+# General legal term expansions
+LEGAL_EXPANSIONS = {
+    'terrorism': ['terrorist', 'terrorism act', 'sectarian', 'hate'],
+    'qisas': ['retaliation', 'qisas enforcement', 'death penalty'],
+    'ta\'zir': ['ta\'zir punishment', 'discretionary punishment'],
+    'offence': ['offence definition', 'punishment', 'liability'],
+}
+
 
 def load_documents_from_data_dir(data_dir: str = "./data") -> List[Document]:
     """
@@ -235,6 +243,11 @@ def _expand_query(query: str) -> str:
             # Add related keywords to the query
             keywords = SECTION_KEYWORDS[section_num]
             expanded = query + " " + " ".join(keywords)
+    
+    # Check for general legal terms and expand them
+    for term, expansions in LEGAL_EXPANSIONS.items():
+        if term in query.lower():
+            expanded = expanded + " " + " ".join(expansions)
     
     return expanded
 
