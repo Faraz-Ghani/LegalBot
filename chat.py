@@ -37,12 +37,13 @@ def initialize_llm(api_key: str, model: str = "llama-3.3-70b-versatile", tempera
     return llm
 
 
-def build_context_from_chunks(chunks: list) -> str:
+def build_context_from_chunks(chunks: list, max_length: int = 3000) -> str:
     """
     Format retrieved chunks into a context string.
     
     Args:
         chunks: List of retrieved chunk dictionaries
+        max_length: Maximum length of context in characters (default: 3000)
         
     Returns:
         Formatted context string
@@ -53,11 +54,21 @@ def build_context_from_chunks(chunks: list) -> str:
     context = "RELEVANT CONTEXT FROM DOCUMENTS:\n"
     context += "=" * 80 + "\n\n"
     
+    current_length = len(context)
+    
     for chunk in chunks:
         source = chunk.get('source', 'Unknown Source')
-        context += f"[{source}] {chunk.get('metadata', {})}\n"
-        context += "-" * 80 + "\n"
-        context += f"{chunk['text']}\n\n"
+        chunk_text = f"[{source}]\n"
+        chunk_text += "-" * 80 + "\n"
+        chunk_text += f"{chunk['text']}\n\n"
+        
+        # Stop adding chunks if we exceed max length
+        if current_length + len(chunk_text) > max_length:
+            context += f"\n[...additional relevant context truncated to fit token limit...]\n"
+            break
+        
+        context += chunk_text
+        current_length += len(chunk_text)
     
     return context
 
