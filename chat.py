@@ -14,7 +14,7 @@ except Exception:
     pass  # .env may not exist in production (Streamlit Cloud uses secrets)
 
 # System prompt - strict context-only answering
-SYSTEM_PROMPT = """You are an expert assistant. You will be provided with context extracted from official documents. Your ONLY job is to answer the user's question using STRICTLY the provided context. If the answer is not explicitly stated in the context, you must reply exactly with: "The provided documents do not contain this information." Do not use outside knowledge. Do not guess. Always cite the source filename and page number for your answer."""
+SYSTEM_PROMPT = """You are a legal expert assistant. Answer the user's question using ONLY the provided context from official Pakistani legal documents. If you find the answer in the context, cite the source and provide all relevant details. If the answer is not in the context, reply: "The provided documents do not contain this information." Be thorough and quote relevant sections."""
 
 
 def initialize_llm(api_key: str, model: str = "llama-3.3-70b-versatile", temperature: float = 0.0) -> ChatGroq:
@@ -84,12 +84,12 @@ def query_rag_pipeline(user_query: str, api_key: str) -> str:
     Returns:
         LLM response
     """
-    # Step 1: Retrieve relevant chunks
+    # Step 1: Retrieve relevant chunks (retrieve more to ensure coverage)
     print(f"\n[Retrieving context...]")
-    retrieved_chunks = retrieve_relevant_chunks(user_query, k=5)
+    retrieved_chunks = retrieve_relevant_chunks(user_query, k=20)
     
-    # Step 2: Build context from chunks
-    context = build_context_from_chunks(retrieved_chunks)
+    # Step 2: Build context from chunks (use all retrieved chunks, context limiting will handle size)
+    context = build_context_from_chunks(retrieved_chunks, max_length=3000)
     
     # Step 3: Initialize LLM
     llm = initialize_llm(api_key)

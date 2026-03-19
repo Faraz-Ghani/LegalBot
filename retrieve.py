@@ -3,12 +3,27 @@ from langchain_community.vectorstores import Chroma
 from langchain_community.retrievers import BM25Retriever
 from langchain.retrievers import EnsembleRetriever
 from langchain.schema import Document
-from typing import List, Dict
+from typing import List, Dict, Optional
 from pathlib import Path
 try:
     import fitz  # PyMuPDF
 except ImportError:
     import pymupdf as fitz  # Fallback for newer versions
+
+# Global cache for expensive model/retriever loading
+_embeddings_cache: Optional[HuggingFaceEmbeddings] = None
+_bm25_retriever_cache: Optional[BM25Retriever] = None
+
+# Section number to keyword mappings for query expansion
+# Maps section numbers to common keywords and related terms across documents
+SECTION_KEYWORDS = {
+    '302': ['qatl-i-amd', 'punishment', 'death', 'ta\'zir', 'qisas'],
+    '299': ['definitions', 'qatl'],
+    '300': ['qatl-i-amd', 'definition'],
+    '303': ['ikrah-i-tam', 'ikrah-i-naqis'],
+    '304': ['proof', 'qatl', 'qisas'],
+    '310': ['compounding', 'qisas', 'sulh'],
+}
 
 
 def load_documents_from_data_dir(data_dir: str = "./data") -> List[Document]:
@@ -100,15 +115,24 @@ def clean_text(text: str) -> str:
 
 def load_bm25_retriever(k: int = 5, data_dir: str = "./data") -> BM25Retriever:
     """
-    Load BM25 retriever from documents in the data directory.
+    Load or retrieve cached BM25 retriever.
+    Documents are cached to avoid reloading PDFs on every query.
     
     Args:
-        k: Number of results to return
+        k: Number of top results to return
         data_dir: Path to directory containing PDF files
         
     Returns:
         BM25Retriever instance
     """
+    global _bm25_retriever_cache
+    
+    # Return cached retriever if available
+    if _bm25_retriever_cache is not None:
+        _bm25_retriever_cache.k = k
+        return _bm25_retriever_cache
+    
+    # Otherwise, load documents and create retriever
     print(f"Loading documents from '{data_dir}' for BM25 retriever...\n")
     documents = load_documents_from_data_dir(data_dir)
     
@@ -116,17 +140,17 @@ def load_bm25_retriever(k: int = 5, data_dir: str = "./data") -> BM25Retriever:
         raise ValueError("No documents loaded for BM25 retriever")
     
     # Create BM25 retriever
-    bm25_retriever = BM25Retriever.from_documents(documents)
-    bm25_retriever.k = k
+    _bm25_retriever_cache = BM25Retriever.from_documents(documents)
+    _bm25_retriever_cache.k = k
     
     print(f"✓ BM25 retriever created with {len(documents)} documents\n")
     
-    return bm25_retriever
+    return _bm25_retriever_cache
 
 
 def load_vectorstore(persist_directory: str = "./chroma_db") -> Chroma:
     """
-    Load the existing ChromaDB vector store.
+    Load the existing ChromaDB vector store with cached embeddings.
     
     Args:
         persist_directory: Path to the persisted ChromaDB
@@ -134,10 +158,17 @@ def load_vectorstore(persist_directory: str = "./chroma_db") -> Chroma:
     Returns:
         Chroma vector store instance
     """
-    embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+    global _embeddings_cache
+    
+    # Reuse cached embeddings if available
+    if _embeddings_cache is None:
+        print("Loading HuggingFace embeddings model (this may take a moment)...")
+        _embeddings_cache = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+        print("✓ Embeddings model loaded\n")
+    
     vectorstore = Chroma(
         persist_directory=persist_directory,
-        embedding_function=embeddings,
+        embedding_function=_embeddings_cache,
         collection_name="pdf_documents"
     )
     return vectorstore
@@ -146,6 +177,8 @@ def load_vectorstore(persist_directory: str = "./chroma_db") -> Chroma:
 def load_ensemble_retriever(k: int = 5, persist_directory: str = "./chroma_db", data_dir: str = "./data"):
     """
     Load an EnsembleRetriever combining BM25 (keyword-based) and Chroma (semantic).
+    Uses weights: Chroma (0.7) semantic/meaning-based, BM25 (0.3) keyword-based.
+    This prioritizes semantic understanding over exact keyword matching.
     
     Args:
         k: Number of top results to return from ensemble
@@ -165,31 +198,65 @@ def load_ensemble_retriever(k: int = 5, persist_directory: str = "./chroma_db", 
     vectorstore = load_vectorstore(persist_directory)
     chroma_retriever = vectorstore.as_retriever(search_kwargs={"k": k})
     
-    # Create ensemble retriever with equal weights
+    # Create ensemble retriever with weights favoring semantic search
+    # Semantic search (Chroma) = 0.7, BM25 keyword = 0.3
     ensemble_retriever = EnsembleRetriever(
-        retrievers=[bm25_retriever, chroma_retriever],
-        weights=[0.5, 0.5]
+        retrievers=[chroma_retriever, bm25_retriever],
+        weights=[0.7, 0.3]
     )
     
-    print("✓ Ensemble retriever created with BM25 (0.5) + Chroma (0.5)\n")
+    print("✓ Ensemble retriever created with Chroma semantic (0.7) + BM25 keyword (0.3)\n")
     
     return ensemble_retriever
 
 
+def _expand_query(query: str) -> str:
+    """
+    Expand a query with related keywords for better retrieval across documents.
+    
+    For example: "What is section 302?" becomes "section 302 qatl-i-amd punishment death ta'zir qisas"
+    This helps find related content across all documents.
+    
+    Args:
+        query: Original user query
+        
+    Returns:
+        Expanded query with related keywords
+    """
+    expanded = query
+    
+    # Check if query asks about a specific section
+    import re
+    section_match = re.search(r'section\s+(\d+)', query.lower())
+    
+    if section_match:
+        section_num = section_match.group(1)
+        if section_num in SECTION_KEYWORDS:
+            # Add related keywords to the query
+            keywords = SECTION_KEYWORDS[section_num]
+            expanded = query + " " + " ".join(keywords)
+    
+    return expanded
+
+
 def retrieve_relevant_chunks(
     query: str,
-    k: int = 5,
+    k: int = 10,
     persist_directory: str = "./chroma_db",
     data_dir: str = "./data"
 ) -> List[Dict[str, any]]:
     """
-    Retrieve the top-k most relevant document chunks using ensemble retrieval.
-    Combines BM25 (keyword-based) and semantic (vector) search.
+    Retrieve the top-k most relevant document chunks using BM25 retrieval with query expansion.
+    
+    Scales to 200+ PDFs by:
+    1. Expanding queries with domain-specific keywords (e.g., section 302 -> qatl-i-amd, punishment, etc.)
+    2. Using fast BM25 keyword search (linear complexity, no embeddings)
+    3. Filtering by relevance without loading models
     
     Args:
         query: User's search query
-        k: Number of top results to return (default: 5)
-        persist_directory: Path to the persisted ChromaDB
+        k: Number of top results to return (default: 10)
+        persist_directory: Path to the persisted ChromaDB (unused, kept for compatibility)
         data_dir: Path to directory containing PDF files
         
     Returns:
@@ -197,19 +264,52 @@ def retrieve_relevant_chunks(
     """
     print(f"Searching for: '{query}'\n")
     
-    # Load ensemble retriever
-    ensemble_retriever = load_ensemble_retriever(k=k, persist_directory=persist_directory, data_dir=data_dir)
+    # Expand query with related keywords
+    expanded_query = _expand_query(query)
     
-    # Perform ensemble retrieval
-    results = ensemble_retriever.invoke(query)
+    # Use BM25 retriever (fast, scales to 200+ PDFs)
+    # Get more results to allow filtering without missing relevant content
+    bm25_retriever = load_bm25_retriever(k=k*3, data_dir=data_dir)
+    results = bm25_retriever.invoke(expanded_query)
     
+    # Simple relevance filtering: keep top k, prefer exact matches
+    query_lower = query.lower()
+    scored_results = []
+    
+    for doc in results:
+        text_lower = doc.page_content.lower()
+        
+        # Score based on how well the chunk matches the original query
+        score = 0
+        
+        # High score for exact phrase matches
+        if query_lower in text_lower:
+            score += 100
+        
+        # Medium score for individual keyword matches
+        for word in query_lower.split():
+            if len(word) > 3 and word in text_lower:
+                score += 10
+        
+        # Keep documents with any relevance
+        if score > 0 or 'section' in query_lower:
+            scored_results.append((score, doc))
+    
+    # Sort by relevance score
+    scored_results.sort(key=lambda x: -x[0])
+    results = [doc for _, doc in scored_results[:k]]
+    
+    # If no results found with scoring, fall back to BM25 results
+    if not results:
+        results = bm25_retriever.invoke(query)[:k]
+    
+    # Convert to dictionary format
     retrieved_chunks = []
     for i, doc in enumerate(results, 1):
-        # Extract source filename from metadata
         metadata = doc.metadata if hasattr(doc, 'metadata') else {}
         source = metadata.get('source', 'Unknown Source')
         
-        # Extract just the filename from the path if it's a full path
+        # Extract just filename
         if '/' in source:
             source = source.split('/')[-1]
         
