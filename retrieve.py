@@ -1,8 +1,7 @@
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.vectorstores import Chroma
 from langchain_community.retrievers import BM25Retriever
-from langchain.retrievers import EnsembleRetriever
-from langchain.schema import Document
+from langchain_core.documents import Document
 from typing import List, Dict, Optional
 from pathlib import Path
 try:
@@ -180,42 +179,6 @@ def load_vectorstore(persist_directory: str = "./chroma_db") -> Chroma:
         collection_name="pdf_documents"
     )
     return vectorstore
-
-
-def load_ensemble_retriever(k: int = 5, persist_directory: str = "./chroma_db", data_dir: str = "./data"):
-    """
-    Load an EnsembleRetriever combining BM25 (keyword-based) and Chroma (semantic).
-    Uses weights: Chroma (0.7) semantic/meaning-based, BM25 (0.3) keyword-based.
-    This prioritizes semantic understanding over exact keyword matching.
-    
-    Args:
-        k: Number of top results to return from ensemble
-        persist_directory: Path to the persisted ChromaDB
-        data_dir: Path to directory containing PDF files
-        
-    Returns:
-        EnsembleRetriever instance combining BM25 and Chroma
-    """
-    print("Loading ensemble retriever components...\n")
-    
-    # Load BM25 retriever
-    bm25_retriever = load_bm25_retriever(k=k, data_dir=data_dir)
-    
-    # Load Chroma vector store
-    print(f"Loading ChromaDB from '{persist_directory}'...\n")
-    vectorstore = load_vectorstore(persist_directory)
-    chroma_retriever = vectorstore.as_retriever(search_kwargs={"k": k})
-    
-    # Create ensemble retriever with weights favoring semantic search
-    # Semantic search (Chroma) = 0.7, BM25 keyword = 0.3
-    ensemble_retriever = EnsembleRetriever(
-        retrievers=[chroma_retriever, bm25_retriever],
-        weights=[0.7, 0.3]
-    )
-    
-    print("✓ Ensemble retriever created with Chroma semantic (0.7) + BM25 keyword (0.3)\n")
-    
-    return ensemble_retriever
 
 
 def _expand_query(query: str) -> str:

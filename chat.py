@@ -115,6 +115,11 @@ def main():
     print("=" * 80)
     print("Type 'exit' or 'quit' to end the conversation.\n")
     
+    # Get API key from environment
+    groq_api_key = os.environ.get("GROQ_API_KEY", "").strip()
+    if not groq_api_key:
+        raise ValueError("GROQ_API_KEY not found in environment variables")
+    
     while True:
         try:
             user_input = input("You: ").strip()
